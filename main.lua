@@ -276,25 +276,25 @@ function DictionaryMode:showCustomTapZoneDialog(on_applied)
         title = _("Custom tap zone"),
         fields = {
             {
-                description = _("X (left, 0–1 or %)"),
+                description = _("X (left, 0 -> 1 or %)"),
                 input_type = "number",
                 text = tostring(zone.ratio_x),
                 hint = "0.23",
             },
             {
-                description = _("Y (top, 0–1 or %)"),
+                description = _("Y (top, 0 -> 1 or %)"),
                 input_type = "number",
                 text = tostring(zone.ratio_y),
                 hint = "0.05",
             },
             {
-                description = _("W (width, 0–1 or %)"),
+                description = _("W (width, 0 -> 1 or %)"),
                 input_type = "number",
                 text = tostring(zone.ratio_w),
                 hint = "0.54",
             },
             {
-                description = _("H (height, 0–1 or %)"),
+                description = _("H (height, 0 -> 1 or %)"),
                 input_type = "number",
                 text = tostring(zone.ratio_h),
                 hint = "0.9",

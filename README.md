@@ -23,8 +23,8 @@ Page turns while the mode is on: swipe, hardware buttons, or tap outside the zon
 
 1. Create a folder named `dictionarymode.koplugin` in your KOReader `plugins` directory.
 2. Copy files (`main.lua`, `_meta.lua`) from this repository into that folder.
-3. Enable it under **Main Menu → Options → More tools → Plugin management**.
-4. Restart KOReader after replacing files.
+3. Restart KOReader.
+4. Enable it under **Main Menu → Options → More tools → Plugin management**.
 
 ## Credits
 Original plugin: [ckilb/dictionarymode.koplugin](https://github.com/ckilb/dictionarymode.koplugin).

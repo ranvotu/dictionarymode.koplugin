@@ -26,5 +26,5 @@ Page turns while the mode is on: swipe, hardware buttons, or tap outside the zon
 3. Enable it under **Main Menu → Options → More tools → Plugin management**.
 4. Restart KOReader after replacing files.
 
-# Credits:
+## Credits
 Original plugin: [ckilb/dictionarymode.koplugin](https://github.com/ckilb/dictionarymode.koplugin).

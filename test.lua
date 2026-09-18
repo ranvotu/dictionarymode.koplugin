@@ -68,35 +68,46 @@ end
 
 function DictionaryMode:getContentRect()
     local sw, sh = Screen:getWidth(), Screen:getHeight()
-    local left, right = 0, 0
+    local left, top, right, bottom = 0, 0, 0, 0
     local doc = self.ui.document
 
     if doc and doc.getPageMargins then
         local m = doc:getPageMargins()
         if m then
             left = m.left or 0
+            top = m.top or 0
             right = m.right or 0
+            bottom = m.bottom or 0
+        end
+        if doc.getHeaderHeight then
+            top = top + (doc:getHeaderHeight() or 0)
         end
     elseif self.ui.paging and self.view.getScreenPageArea then
         local page = self.view.state and self.view.state.page
         local area = self.view:getScreenPageArea(page)
         if area then
             left = area.x or 0
+            top = area.y or 0
             right = sw - left - (area.w or sw)
+            bottom = sh - top - (area.h or sh)
         end
     end
 
     if left < 0 then left = 0 end
+    if top < 0 then top = 0 end
     if right < 0 then right = 0 end
+    if bottom < 0 then bottom = 0 end
 
     local w = sw - left - right
+    local h = sh - top - bottom
     if w < 0 then w = 0 end
+    if h < 0 then h = 0 end
 
     return {
         x = left,
-        y = 0,
+        y = top,
         w = w,
-        h = sh,
+        h = h,
         sw = sw,
         sh = sh,
         left = left,
@@ -107,29 +118,37 @@ end
 
 function DictionaryMode:getContentTapZone()
     local r = self:getContentRect()
-    if r.sw <= 0 or r.w <= 0 then
+    if r.sw <= 0 or r.sh <= 0 or r.w <= 0 or r.h <= 0 then
         return self:getDefaultTapZone()
     end
     local zone = {
         ratio_x = r.x / r.sw,
-        ratio_y = 0,
+        ratio_y = r.y / r.sh,
         ratio_w = r.w / r.sw,
-        ratio_h = 1,
+        ratio_h = r.h / r.sh,
     }
     if zone.ratio_x < 0 then zone.ratio_x = 0 end
+    if zone.ratio_y < 0 then zone.ratio_y = 0 end
     if zone.ratio_x + zone.ratio_w > 1 then
         zone.ratio_w = 1 - zone.ratio_x
     end
+    if zone.ratio_y + zone.ratio_h > 1 then
+        zone.ratio_h = 1 - zone.ratio_y
+    end
     if zone.ratio_w < 0.2 then zone.ratio_w = 0.2 end
+    if zone.ratio_h < 0.2 then zone.ratio_h = 0.2 end
     return zone
 end
 
 function DictionaryMode:isInContentArea(pos)
     local r = self:getContentRect()
-    if r.w <= 0 then
+    if r.w <= 0 or r.h <= 0 then
         return false
     end
     if pos.x < r.x or pos.x > r.x + r.w then
+        return false
+    end
+    if pos.y < r.y or pos.y > r.y + r.h then
         return false
     end
     if r.vpc and r.vpc > 1 then

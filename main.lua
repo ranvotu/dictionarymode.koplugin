@@ -190,7 +190,7 @@ function DictionaryMode:addToMainMenu(menu_items)
             },
             {
                 text_func = function()
-                    return T(_("Auto, text area (%1)"), self:formatTapZone(self:getContentTapZone()))
+                    return T(_("Auto (%1)"), self:formatTapZone(self:getContentTapZone()))
                 end,
                 checked_func = function()
                     return self:getTapZoneType() == "auto"

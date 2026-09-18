@@ -290,7 +290,7 @@ function DictionaryMode:addToMainMenu(menu_items)
                 end,
             },
             {
-                text = _("Only text (word box)"),
+                text = _("Only text"),
                 checked_func = function()
                     return self:getTapZoneType() == "text"
                 end,

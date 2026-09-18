@@ -15,13 +15,6 @@ local FACTORY_TAP_ZONE = {
     ratio_h = 0.9,
 }
 
-local FULL_TAP_ZONE = {
-    ratio_x = 0,
-    ratio_y = 0,
-    ratio_w = 1,
-    ratio_h = 1,
-}
-
 local DictionaryMode = WidgetContainer:extend{
     name = "dictionarymode",
     is_doc_only = true,
@@ -64,6 +57,11 @@ end
 
 function DictionaryMode:getDefaultTapZone()
     return G_reader_settings:readSetting("dictionary_mode_default_tap_zone") or FACTORY_TAP_ZONE
+end
+
+function DictionaryMode:usesContentTapZone()
+    local zone_type = self:getTapZoneType()
+    return zone_type == "auto" or zone_type == "text"
 end
 
 function DictionaryMode:getContentRect()
@@ -162,11 +160,8 @@ end
 
 function DictionaryMode:getTapZone()
     local zone_type = self:getTapZoneType()
-    if zone_type == "auto" then
+    if zone_type == "auto" or zone_type == "text" then
         return self:getContentTapZone()
-    end
-    if zone_type == "text" then
-        return FULL_TAP_ZONE
     end
     if zone_type == "custom" then
         local zone = G_reader_settings:readSetting("dictionary_mode_tap_zone")
@@ -290,7 +285,9 @@ function DictionaryMode:addToMainMenu(menu_items)
                 end,
             },
             {
-                text = _("Only text"),
+                text_func = function()
+                    return T(_("Only text (%1)"), self:formatTapZone(self:getContentTapZone()))
+                end,
                 checked_func = function()
                     return self:getTapZoneType() == "text"
                 end,
@@ -437,13 +434,13 @@ function DictionaryMode:onReaderReady()
 end
 
 function DictionaryMode:onSetDimensions()
-    if self:getTapZoneType() == "auto" then
+    if self:usesContentTapZone() then
         self:registerTap()
     end
 end
 
 function DictionaryMode:onDocumentRerendered()
-    if self:getTapZoneType() == "auto" then
+    if self:usesContentTapZone() then
         self:registerTap()
     end
 end
@@ -462,7 +459,7 @@ function DictionaryMode:onTap(_, ges)
     end
 
     local zone_type = self:getTapZoneType()
-    if zone_type == "auto" and not self:isInContentArea(ges.pos) then
+    if self:usesContentTapZone() and not self:isInContentArea(ges.pos) then
         return false
     end
 

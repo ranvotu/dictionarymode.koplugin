@@ -2,18 +2,24 @@ local Dispatcher = require("dispatcher")
 local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
-local RadioButtonWidget = require("ui/widget/radiobuttonwidget")
 local Screen = require("device").screen
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
-local DEFAULT_TAP_ZONE = {
+local FACTORY_TAP_ZONE = {
     ratio_x = 0.23,
     ratio_y = 0.05,
     ratio_w = 0.54,
     ratio_h = 0.9,
+}
+
+local FULL_TAP_ZONE = {
+    ratio_x = 0,
+    ratio_y = 0,
+    ratio_w = 1,
+    ratio_h = 1,
 }
 
 local DictionaryMode = WidgetContainer:extend{
@@ -56,48 +62,41 @@ function DictionaryMode:setTapZoneType(zone_type, zone)
     self:registerTap()
 end
 
+function DictionaryMode:getDefaultTapZone()
+    return G_reader_settings:readSetting("dictionary_mode_default_tap_zone") or FACTORY_TAP_ZONE
+end
+
 function DictionaryMode:getContentRect()
     local sw, sh = Screen:getWidth(), Screen:getHeight()
-    local left, top, right, bottom = 0, 0, 0, 0
+    local left, right = 0, 0
     local doc = self.ui.document
 
     if doc and doc.getPageMargins then
         local m = doc:getPageMargins()
         if m then
             left = m.left or 0
-            top = m.top or 0
             right = m.right or 0
-            bottom = m.bottom or 0
-        end
-        if doc.getHeaderHeight then
-            top = top + (doc:getHeaderHeight() or 0)
         end
     elseif self.ui.paging and self.view.getScreenPageArea then
         local page = self.view.state and self.view.state.page
         local area = self.view:getScreenPageArea(page)
         if area then
             left = area.x or 0
-            top = area.y or 0
             right = sw - left - (area.w or sw)
-            bottom = sh - top - (area.h or sh)
         end
     end
 
     if left < 0 then left = 0 end
-    if top < 0 then top = 0 end
     if right < 0 then right = 0 end
-    if bottom < 0 then bottom = 0 end
 
     local w = sw - left - right
-    local h = sh - top - bottom
     if w < 0 then w = 0 end
-    if h < 0 then h = 0 end
 
     return {
         x = left,
-        y = top,
+        y = 0,
         w = w,
-        h = h,
+        h = sh,
         sw = sw,
         sh = sh,
         left = left,
@@ -108,40 +107,31 @@ end
 
 function DictionaryMode:getContentTapZone()
     local r = self:getContentRect()
-    if r.sw <= 0 or r.sh <= 0 or r.w <= 0 or r.h <= 0 then
-        return DEFAULT_TAP_ZONE
+    if r.sw <= 0 or r.w <= 0 then
+        return self:getDefaultTapZone()
     end
     local zone = {
         ratio_x = r.x / r.sw,
-        ratio_y = r.y / r.sh,
+        ratio_y = 0,
         ratio_w = r.w / r.sw,
-        ratio_h = r.h / r.sh,
+        ratio_h = 1,
     }
     if zone.ratio_x < 0 then zone.ratio_x = 0 end
-    if zone.ratio_y < 0 then zone.ratio_y = 0 end
     if zone.ratio_x + zone.ratio_w > 1 then
         zone.ratio_w = 1 - zone.ratio_x
     end
-    if zone.ratio_y + zone.ratio_h > 1 then
-        zone.ratio_h = 1 - zone.ratio_y
-    end
     if zone.ratio_w < 0.2 then zone.ratio_w = 0.2 end
-    if zone.ratio_h < 0.2 then zone.ratio_h = 0.2 end
     return zone
 end
 
 function DictionaryMode:isInContentArea(pos)
     local r = self:getContentRect()
-    if r.w <= 0 or r.h <= 0 then
+    if r.w <= 0 then
         return false
     end
     if pos.x < r.x or pos.x > r.x + r.w then
         return false
     end
-    if pos.y < r.y or pos.y > r.y + r.h then
-        return false
-    end
-    -- Two-page mode: middle gutter is treated as margin (page turns)
     if r.vpc and r.vpc > 1 then
         local mid = r.sw / 2
         if pos.x > mid - r.right and pos.x < mid + r.left then
@@ -156,18 +146,68 @@ function DictionaryMode:getTapZone()
     if zone_type == "auto" then
         return self:getContentTapZone()
     end
+    if zone_type == "text" then
+        return FULL_TAP_ZONE
+    end
     if zone_type == "custom" then
         local zone = G_reader_settings:readSetting("dictionary_mode_tap_zone")
         if zone then
             return zone
         end
     end
-    return DEFAULT_TAP_ZONE
+    return self:getDefaultTapZone()
 end
 
 function DictionaryMode:formatTapZone(zone)
     return T("x=%1  y=%2  w=%3  h=%4",
         zone.ratio_x, zone.ratio_y, zone.ratio_w, zone.ratio_h)
+end
+
+function DictionaryMode:getWordScreenBox(word, pos)
+    local sbox = word.sbox
+    if not sbox then
+        return nil
+    end
+    if self.ui.paging and self.view.pageToScreenTransform then
+        sbox = self.view:pageToScreenTransform(pos.page, sbox)
+    end
+    return sbox
+end
+
+function DictionaryMode:tapHitsWord(ges, word, pos)
+    local sbox = self:getWordScreenBox(word, pos)
+    if not sbox or not sbox.w or sbox.w <= 0 then
+        return false
+    end
+    local slop_x = math.max(Screen:scaleBySize(6), sbox.w * 0.15)
+    local slop_y = math.max(Screen:scaleBySize(4), (sbox.h or 0) * 0.25)
+    local x = ges.pos.x
+    local y = ges.pos.y
+    if x < sbox.x - slop_x or x > sbox.x + sbox.w + slop_x then
+        return false
+    end
+    if y < (sbox.y or 0) - slop_y or y > (sbox.y or 0) + (sbox.h or 0) + slop_y then
+        return false
+    end
+    return true
+end
+
+function DictionaryMode:lookupSelection(selection)
+    if self.ui.languagesupport and self.ui.languagesupport:hasActiveLanguagePlugins() then
+        local new_selection = self.ui.languagesupport:improveWordSelection(selection)
+        if new_selection then
+            selection = new_selection
+        end
+    end
+    local text = self:cleanupSelectedText(selection.text or "")
+    if text == "" then
+        return false
+    end
+    self.ui:handleEvent(Event:new("LookupWord", text))
+    if self.ui.document.clearSelection then
+        self.ui.document:clearSelection()
+    end
+    return true
 end
 
 function DictionaryMode:addToMainMenu(menu_items)
@@ -202,7 +242,7 @@ function DictionaryMode:addToMainMenu(menu_items)
             },
             {
                 text_func = function()
-                    return T(_("Default (%1)"), self:formatTapZone(DEFAULT_TAP_ZONE))
+                    return T(_("Default (%1)"), self:formatTapZone(self:getDefaultTapZone()))
                 end,
                 checked_func = function()
                     return self:getTapZoneType() == "default"
@@ -214,7 +254,7 @@ function DictionaryMode:addToMainMenu(menu_items)
             },
             {
                 text_func = function()
-                    local zone = G_reader_settings:readSetting("dictionary_mode_tap_zone") or DEFAULT_TAP_ZONE
+                    local zone = G_reader_settings:readSetting("dictionary_mode_tap_zone") or self:getDefaultTapZone()
                     return T(_("Custom (%1)"), self:formatTapZone(zone))
                 end,
                 checked_func = function()
@@ -228,6 +268,16 @@ function DictionaryMode:addToMainMenu(menu_items)
                             touchmenu_instance:updateItems()
                         end
                     end)
+                end,
+            },
+            {
+                text = _("Only text (word box)"),
+                checked_func = function()
+                    return self:getTapZoneType() == "text"
+                end,
+                radio = true,
+                callback = function()
+                    self:setTapZoneType("text")
                 end,
             },
         },
@@ -246,16 +296,6 @@ function DictionaryMode:onDictionaryMode()
     })
 end
 
-function DictionaryMode:enableWithNotice()
-    if not self:isEnabled() then
-        G_reader_settings:saveSetting("enable_dictionary_mode", true)
-    end
-    UIManager:show(InfoMessage:new{
-        text = _("Dictionary mode enabled"),
-        timeout = 1,
-    })
-end
-
 function DictionaryMode:parseRatio(value, fallback)
     local n = tonumber(value)
     if not n then
@@ -269,8 +309,26 @@ function DictionaryMode:parseRatio(value, fallback)
     return n
 end
 
+function DictionaryMode:readZoneFromDialog(dialog)
+    local fields = dialog:getFields()
+    local fallback = self:getDefaultTapZone()
+    local zone = {
+        ratio_x = self:parseRatio(fields[1], fallback.ratio_x),
+        ratio_y = self:parseRatio(fields[2], fallback.ratio_y),
+        ratio_w = self:parseRatio(fields[3], fallback.ratio_w),
+        ratio_h = self:parseRatio(fields[4], fallback.ratio_h),
+    }
+    if zone.ratio_x + zone.ratio_w > 1 then
+        zone.ratio_w = 1 - zone.ratio_x
+    end
+    if zone.ratio_y + zone.ratio_h > 1 then
+        zone.ratio_h = 1 - zone.ratio_y
+    end
+    return zone
+end
+
 function DictionaryMode:showCustomTapZoneDialog(on_applied)
-    local zone = G_reader_settings:readSetting("dictionary_mode_tap_zone") or DEFAULT_TAP_ZONE
+    local zone = G_reader_settings:readSetting("dictionary_mode_tap_zone") or self:getDefaultTapZone()
     local dialog
     dialog = MultiInputDialog:new{
         title = _("Custom tap zone"),
@@ -312,6 +370,8 @@ function DictionaryMode:showCustomTapZoneDialog(on_applied)
                 {
                     text = _("Default"),
                     callback = function()
+                        local new_default = self:readZoneFromDialog(dialog)
+                        G_reader_settings:saveSetting("dictionary_mode_default_tap_zone", new_default)
                         self:setTapZoneType("default")
                         UIManager:close(dialog)
                         if on_applied then on_applied() end
@@ -321,20 +381,7 @@ function DictionaryMode:showCustomTapZoneDialog(on_applied)
                     text = _("Apply"),
                     is_enter_default = true,
                     callback = function()
-                        local fields = dialog:getFields()
-                        local custom = {
-                            ratio_x = self:parseRatio(fields[1], DEFAULT_TAP_ZONE.ratio_x),
-                            ratio_y = self:parseRatio(fields[2], DEFAULT_TAP_ZONE.ratio_y),
-                            ratio_w = self:parseRatio(fields[3], DEFAULT_TAP_ZONE.ratio_w),
-                            ratio_h = self:parseRatio(fields[4], DEFAULT_TAP_ZONE.ratio_h),
-                        }
-                        if custom.ratio_x + custom.ratio_w > 1 then
-                            custom.ratio_w = 1 - custom.ratio_x
-                        end
-                        if custom.ratio_y + custom.ratio_h > 1 then
-                            custom.ratio_h = 1 - custom.ratio_y
-                        end
-                        self:setTapZoneType("custom", custom)
+                        self:setTapZoneType("custom", self:readZoneFromDialog(dialog))
                         UIManager:close(dialog)
                         if on_applied then on_applied() end
                     end,
@@ -394,26 +441,48 @@ function DictionaryMode:onTap(_, ges)
     if G_reader_settings:nilOrFalse("enable_dictionary_mode") then
         return false
     end
-    if self:getTapZoneType() == "auto" and not self:isInContentArea(ges.pos) then
+
+    local zone_type = self:getTapZoneType()
+    if zone_type == "auto" and not self:isInContentArea(ges.pos) then
         return false
     end
+
     local pos = self.view:screenToPageTransform(ges.pos)
-    local selection = self.ui.document:getTextFromPositions(pos, pos)
-    if not selection then
+    if not pos then
+        return false
+    end
+
+    if zone_type == "text" then
+        local ok, word = pcall(function()
+            return self.ui.document:getWordFromPosition(pos, true)
+        end)
+        if not ok or not word or not word.word or word.word == "" then
+            return false
+        end
+        if word.word:find("%s") then
+            return false
+        end
+        if not self:tapHitsWord(ges, word, pos) then
+            return false
+        end
+        return self:lookupSelection({
+            text = word.word,
+            pos0 = word.pos0 or word.pos,
+            pos1 = word.pos1 or word.pos,
+            sboxes = word.sbox and { word.sbox } or nil,
+        })
+    end
+
+    local ok, selection = pcall(function()
+        return self.ui.document:getTextFromPositions(pos, pos)
+    end)
+    if not ok or not selection or not selection.text then
         return false
     end
     if string.find(selection.text, " ") then
         return false
     end
-    if self.ui.languagesupport and self.ui.languagesupport:hasActiveLanguagePlugins() then
-        local new_selection = self.ui.languagesupport:improveWordSelection(selection)
-        if new_selection then
-            selection = new_selection
-        end
-    end
-    self.ui:handleEvent(Event:new("LookupWord", self:cleanupSelectedText(selection.text)))
-    self.ui.document:clearSelection()
-    return true
+    return self:lookupSelection(selection)
 end
 
 return DictionaryMode

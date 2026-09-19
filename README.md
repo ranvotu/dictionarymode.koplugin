@@ -8,7 +8,7 @@ You can enable it from the menu, or bind the **Dictionary Mode** gesture. When e
 
 Under _Tab zone_, there are 4 modes for you to choose to use:
 
-| Mode | What it does |
+|  | What it does |
 | --- | --- |
 | **Auto** | Uses the book's current page margins to create a _region_ for dictionary tapping. Taps *inside* that area look up a word; taps *outside* unchanged. |
 | **Default** | A fixed _region_. Ships as `x=0.23, y=0.05, w=0.54, h=0.9`. You can replace this with your own values — see Custom below. |

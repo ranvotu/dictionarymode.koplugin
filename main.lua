@@ -323,7 +323,7 @@ function DictionaryMode:addToMainMenu(menu_items)
                 end
             },
             {
-                text = _("Only text"),
+                text = _("Pixel"),
                 help_text_func = function()
                     return T(_("%1"), self:formatTapZone(self:getContentTapZone()))
                 end,

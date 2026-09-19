@@ -324,9 +324,6 @@ function DictionaryMode:addToMainMenu(menu_items)
             },
             {
                 text = _("Pixel"),
-                help_text_func = function()
-                    return T(_("%1"), self:formatTapZone(self:getContentTapZone()))
-                end,
                 checked_func = function()
                     return self:getTapZoneType() == "text"
                 end,
@@ -456,7 +453,6 @@ function DictionaryMode:showCustomTapZoneDialog(on_applied)
         }
     }
     UIManager:show(dialog)
-    dialog:onShowKeyboard()
 end
 
 function DictionaryMode:registerTap()
